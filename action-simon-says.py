@@ -54,16 +54,7 @@ def continue_game(response, session_id):
 def user_request_game(hermes, intent_message):
     session_id = intent_message.session_id
 
-    # parse input message, NOTE extra space to append question
-    n_questions = int(intent_message.slots.n_questions.first().value)
-    if n_questions > 1:
-        response = "Starting a lesson with {} questions. ".format(n_questions)
-    elif n_questions == 1:
-        response = "Starting a lesson with one question. "
-    else:
-        response = "I can only give a positive number of questions."
-        hermes.publish_end_session(session_id, response)
-
+    print('start')
     # initialize session state
     session_state = {
         "ans": answer,
@@ -77,7 +68,7 @@ def user_request_game(hermes, intent_message):
     simonList.append(colorPick())
     # Show the pattern
     simon(simonList)
-    hermes.publish_continue_session(session_id, response + question, INTENT_FILTER_GET_ANSWER)
+    hermes.publish_continue_session(session_id, '', INTENT_FILTER_GET_ANSWER)
 
 
 def user_gives_answer(hermes, intent_message):
@@ -222,10 +213,10 @@ def colorPick():
 
 
 
-while True:
+#while True:
     # Add color to list
-    simonList.append(colorPick())
-    # Show the pattern
-    simon(simonList)
+ #   simonList.append(colorPick())
+  #  # Show the pattern
+   # simon(simonList)
     # Get user to repeat the pattern
-    user(simonList)
+    #user(simonList)
