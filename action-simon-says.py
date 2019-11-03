@@ -2,17 +2,11 @@
 
 
 import paho.mqtt.client as mqtt
-
 from matrix_lite import led
-
 from random import randint
-
 import random
-
 import time
-
 import json
-
 import io
 
 
