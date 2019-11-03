@@ -1,11 +1,22 @@
 #!/usr/bin/env python3
-from hermes_python.hermes import Hermes
-from matrix_lite import led
-from random import randint
-import random
-import time
-import threading
 
+
+import paho.mqtt.client as mqtt
+
+from matrix_lite import led
+
+from random import randint
+
+import random
+
+import time
+
+import json
+
+import io
+
+
+CONFIGURATION_ENCODING_FORMAT = "utf-8"
 MQTT_IP_ADDR = "localhost"
 MQTT_PORT = 1883
 MQTT_ADDR = "{}:{}".format(MQTT_IP_ADDR, str(MQTT_PORT))
@@ -21,6 +32,33 @@ INTENT_FILTER_GET_ANSWER = [
     INTENT_DOES_NOT_KNOW
 ]
 
+# MQTT client to connect to the bus
+mqtt_client = mqtt.Client()
+
+def on_connect(client, userdata, flags, rc):
+    client.subscribe("hermes/intent/#")
+
+def message(client, userdata, msg):
+    data = json.loads(msg.payload.decode("utf-8"))
+    session_id = data['sessionId']
+    try:
+        user, intentname = data['intent']['intentName'].split(':')
+
+            say(session_id, intentname)
+    except KeyError:
+        pass
+
+def say(session_id, text):
+    mqtt_client.publish('hermes/dialogueManager/endSession',
+                        json.dumps({'text': text, "sessionId": session_id}))
+
+
+if __name__ == "__main__":
+    mqtt_client.on_connect = on_connect
+    mqtt_client.message_callback_add("hermes/intent/maxbachmann:RockPaperScissors/#", message)
+    mqtt_client.connect("localhost", 1883)
+    mqtt_client.loop_forever()		
+	
 
 SessionsStates = {}
 simonList = []
@@ -115,13 +153,13 @@ def user_quits(hermes, intent_message):
     hermes.publish_end_session(session_id, response)
 
 
-with Hermes(MQTT_ADDR) as h:
+# with Hermes(MQTT_ADDR) as h:
 
-    h.subscribe_intent(INTENT_START, user_request_game) \
-        .subscribe_intent(INTENT_STOP, user_quits) \
-        .subscribe_intent(INTENT_DOES_NOT_KNOW, user_does_not_know) \
-        .subscribe_intent(INTENT_ANSWER, user_gives_answer) \
-        .start()
+    # h.subscribe_intent(INTENT_START, user_request_game) \
+        # .subscribe_intent(INTENT_STOP, user_quits) \
+        # .subscribe_intent(INTENT_DOES_NOT_KNOW, user_does_not_know) \
+        # .subscribe_intent(INTENT_ANSWER, user_gives_answer) \
+        # .start()
 
 		
 		
