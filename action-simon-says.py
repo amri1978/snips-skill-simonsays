@@ -3,6 +3,7 @@ from hermes_python.hermes import Hermes
 from matrix_lite import led
 from random import randint
 import time
+import threading
 
 CONFIGURATION_ENCODING_FORMAT = "utf-8"
 MQTT_IP_ADDR = "localhost"
@@ -13,6 +14,7 @@ INTENT_START = "amri_amin:start_simon_says"
 INTENT_ANSWER = "amri_amin:give_sequence"
 INTENT_STOP = "amri_amin:stop_game"
 INTENT_DOES_NOT_KNOW = "amri_amin:does_not_know"
+INTENT_SESSION_ENDED     = "hermes:dialogueManager:sessionEnded"
 
 INTENT_FILTER_GET_ANSWER = [
     INTENT_ANSWER,
@@ -21,6 +23,7 @@ INTENT_FILTER_GET_ANSWER = [
 ]
 SessionsStates = {}
 simonList = []
+session_id = 0
 
 def colorPick():
     x =  randint(0,3)
@@ -38,8 +41,8 @@ def simon(simonList):
     # For every color simon has in the list turn on the led that color
     for color in simonList:
         led.set(color)
-        time.sleep(0.60)
-        # Turn it off for a bit to differentiate the list
+        time.sleep(0.30)
+        # Turn it off for a bit
         led.set('black')
         time.sleep(0.25)
 
@@ -61,47 +64,26 @@ def nextTurn():
     for x in range(led.length):
         everloop.append(everloop.pop(0))
         led.set(everloop)
-        time.sleep(0.01)
+        time.sleep(0.1)
 
-
-
-def verifySimon(color, pin, counter):
+def verifySimon(color, counter):
+    if color == '2869x255':
+        color = 'red'
+    elif color == '44161x255':
+        color = 'blue'
+    elif color=='11222x255':
+        color = 'yellow'
+    elif color=='21845x255':
+        color = 'green'
     led.set(color)
     if(simonList[counter] == color):
-        counter += 1
+        return  True
     else:
+        print('game over')
         gameover()
-        return -1
-    return counter
+        return False
 
-def continue_game(response, session_id):
-    SessionsStates[session_id]["step"] += 1
-
-    if SessionsStates[session_id]["step"] == simonList.count():
-        response += "You had {} out of {} correct. ".format(SessionsStates[session_id]["good"],
-                                                                             simonList.count())
-        percent_correct = float(SessionsStates[session_id]["good"]) / simonList.count()
-        if percent_correct == 1.:
-            response += "You are so smart!"
-        elif percent_correct >= 0.75:
-            response += "Well done! With a bit more practice you'll be a master."
-        elif percent_correct >= 0.5:
-            response += "Not bad. With more practice, you'll get better."
-        else:
-            response += "You should really practice more."
-        del SessionsStates[session_id]
-        cont = False
-    else:
-        
-        cont = True
-
-        nextTurn()
-
-    return response, cont
-
-
-def user_request_game(hermes, intent_message):
-    session_id = intent_message.session_id
+def start_game(session_id):
     print('start')
     # initialize session state
     session_state = {
@@ -110,32 +92,40 @@ def user_request_game(hermes, intent_message):
         "step": 0
     }
     SessionsStates[session_id] = session_state
-	# Add color to list
+    # Add color to list
     simonList.append(colorPick())
     # Show the pattern
     simon(simonList)
-    hermes.publish_continue_session(session_id, 'Let\'s start', INTENT_FILTER_GET_ANSWER)
 
+
+
+def user_request_game(hermes,intent_message):
+    session_id = intent_message.session_id
+    start_game(session_id)
+    hermes.publish_continue_session(session_id,'Let\'s start', INTENT_FILTER_GET_ANSWER)
 
 def user_gives_answer(hermes, intent_message):
     session_id = intent_message.session_id
-
-    index = 0
+    answers = []
+    index =-1
+    print(simonList)
     # parse input message
-    for answer in intent_message.slots.answer:
-             print(answer.value)
-
-
+    for slot_value in intent_message.slots.color.all():
+        index=index+1        
+        print (slot_value.value)
+        if (not verifySimon(slot_value.value,index)):
+           user_quits(hermes, intent_message)
+           return 0
+    simonList.append(colorPick())
+    simon(simonList)
+    hermes.publish_continue_session(session_id,'',INTENT_FILTER_GET_ANSWER)
+               
 
 def user_does_not_know(hermes, intent_message):
     session_id = intent_message.session_id
-    response = "That's quite alright! The answer is {}. ".format("Put answer here")
-    # create new question or terminate if reached desired number of questions
-    response, cont = continue_game(response, session_id)
-    if cont:
-        hermes.publish_continue_session(intent_message.session_id,response, INTENT_FILTER_GET_ANSWER)
-    else:
-        hermes.publish_end_session(session_id, response)
+    response = "Try again"
+    hermes.publish_continue_session(intent_message.session_id,response, INTENT_FILTER_GET_ANSWER)
+
 
 
 def user_quits(hermes, intent_message):
@@ -145,7 +135,11 @@ def user_quits(hermes, intent_message):
     response = "Alright. Let's play again soon!"
     hermes.publish_end_session(session_id, response)
 
-
+def session_ended(hermes, intent_message):
+    session_id = intent_message.session_id
+    response = "Session Ended!"
+    hermes.publish_end_session(session_id, response)
+    
 with Hermes(MQTT_ADDR) as h:
 
     h.subscribe_intent(INTENT_START, user_request_game) \
@@ -153,4 +147,6 @@ with Hermes(MQTT_ADDR) as h:
         .subscribe_intent(INTENT_DOES_NOT_KNOW, user_does_not_know) \
         .subscribe_intent(INTENT_ANSWER, user_gives_answer) \
         .start()
+    
+
 
